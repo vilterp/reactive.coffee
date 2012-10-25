@@ -10,4 +10,8 @@ Inspired by:
 - [FlapJax](http://www.flapjax-lang.org/)
 - [Elm](http://elm-lang.org/)
 
+Used to make:
+
+- [Candor.fm](http://candor.fm/)
+
 No new ideas here really, just an object-oriented lib that's nice and easy to use in CoffeeScript.
