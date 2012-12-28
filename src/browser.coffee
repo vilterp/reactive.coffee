@@ -1,12 +1,25 @@
-class SocketStream extends EventStream
+# TODO: factor into socket family...?
 
-  constructor: -> super()
+class WebSocketStream
 
-class WebSocketStream extends SocketStream
-
-  constructor: (@url) ->
-    super()
+  ###
+  @url: ws:// url to connect to
+  @stream: EventStream of strings. event values will be sent across the socket
+    every time an event is triggered.
+  ###
+  constructor: (@url, @stream) ->
     @socket = new WebSocket(@url)
+    @state = new StateMachine(
+      closed:
+        connect: 'connecting'
+      connecting:
+        connected: 'open'
+      open:
+        close: 'closing'
+      closing:
+        closed: 'closed'
+    )
+
     @socket.addEventListener('message',
       (evt) => this.trigger_event(evt.data)
     )
@@ -38,12 +51,14 @@ class ElemDimensions extends EventStream
     width: @elem.offsetWidth,
     height: @elem.offsetHeight
 
-class ESWindow
 
-  # TODO: hm, this is a little janky
-  constructor: (@window) ->
-    @load = this.from_event(@window, 'load')
-    @unload = this.from_event(@window, 'unload')
+class BrowserEnvironment extends Environment
+
+  constructor: () ->
+    super(window.location.href)
+    window.addEventListener('unload', (evt) =>
+      @do_shutdown()
+    )
 
   bind_value: (stream, object, attr_name) ->
     closed = false
@@ -61,16 +76,11 @@ class ESWindow
 
   from_event: (element, event_name) ->
     source = new EventStream()
-    element.addEventListener event_name, (event) ->
+    element.addEventListener(event_name, (event) ->
       source.trigger_event(event)
+    )
     return source
 
   from_form_value: (element, event_names) ->
     streams = (eswindow.from_event(element, event_name) for event_name in event_names)
     return EventStream.merge(streams, element.value).map((evt) -> element.value)
-
-Debuggee.initialize('ws://localhost:8000/debuggee', window.location.href) # TODO: uh, yeah. coffeescript compile arguments for dev/prod?
-eswindow = new ESWindow(window)
-eswindow.unload.observe((evt) ->
-  Debuggee.shutdown()
-)

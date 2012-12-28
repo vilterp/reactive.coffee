@@ -28,17 +28,20 @@ wsServer = new ws.server(
 router = new ws.router()
 router.attachServer(wsServer)
 
-accept = (req) -> req.accept(req.origin, [])
+accept = (req) ->
+	req.accept(req.origin, [])
 
-debug_reqs = new es.EventStream()
+debugger_reqs = new es.EventStream()
 router.mount('/debugger', null, (req) ->
-	debug_reqs.trigger_event(req)
+	debugger_reqs.trigger_event(req)
 )
-debug_conns = debug_reqs.map(accept)
+debugger_conns = debugger_reqs.map(accept)
 
-app_reqs = new es.EventStream()
+debuggee_reqs = new es.EventStream()
 router.mount('/debuggee', null, (req) ->
-	app_reqs.trigger_event(req)
+	debuggee_reqs.trigger_event(req)
 )
-app_conns = debug_reqs.map(accept)
+debuggee_conns = debuggee_reqs.map(accept)
 
+debuggee_reqs.log()
+debuggee_conns.log()

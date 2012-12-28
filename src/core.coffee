@@ -1,3 +1,8 @@
+if require?
+  dbg = require('./debuggee')
+
+Debuggee = if dbg? then dbg.Debuggee else Debuggee
+
 class EventStream
 
   @constant: (val) ->
@@ -44,29 +49,40 @@ class EventStream
     @observers = []
     @closed = false
     @value = initial_value # optional
-    Debuggee.new_stream(this)
+    # all event streams created before debuggee is initialized are excluded
+    @debug_excluded = not Debuggee.is_initialized
+    if not @debug_excluded
+      Debuggee.instance().new_stream(this)
 
   toString: ->
     return "#<EventStream>"
 
   add_observer: (observer) ->
     @observers.push(observer)
-    Debuggee.new_observer(observer, this)
+    if not @debug_excluded
+      Debuggee.instance().new_observer(observer, this)
 
   trigger_event: (event) ->
     if not @closed
       @value = event
-      Debuggee.event_emitted(this, event)
+      if not @debug_excluded
+        Debuggee.instance().event_emitted(this, event)
       for observer in @observers
-        Debuggee.start_consume(event, observer)
+        if not @debug_excluded
+          Debuggee.instance().start_consume(event, observer)
         observer.on_event(event)
-        Debuggee.end_consume()
+        if not @debug_excluded
+          Debuggee.instance().end_consume()
+    else
+      throw "can't trigger_event on a closed event stream"
 
   trigger_error: (error) ->
     if not @closed
       # TOTHINK: refactor (otherevents)
       for observer in @observers
         observer.on_error(error)
+    else
+      throw "can't trigger_error on a closed event stream"
 
   # TODO: make close state actually mean something (?)
   trigger_close: (reason) ->
@@ -80,6 +96,8 @@ class EventStream
     this.add_observer(observer)
     return observer
 
+  # TODO: refactor these into "Mapper" "Folder" "Filterer" classes,
+  # so we can see them more clearly in the debugger?
   map: (func, initial) ->
     if initial
       mapped = new EventStream(initial)
@@ -174,29 +192,35 @@ class Observer
     if @close_cb?
       @close_cb(reason)
 
-# singleton
-class Util
+class Environment
 
-  @clamp = ((in_min, in_max, out_min, out_max) ->
-    in_delta = in_max - in_min
-    out_delta = out_max - out_min
-    multiplier = out_delta / in_delta
-    return (val) ->
-      out_min + (val-in_min) * multiplier)
+  ###
+    @id_info some kind of info about the process
+      e.g. URL of tab, command line of process
+      don't think we can expect this to be globally unique,
+      since a tab doesn't have a unique id number like a pid,
+      and there could be other instances of the same URL running
+  ###
+  constructor: (@id_info) ->
+    # the primordial event streams...
+    @start    = new EventStream()
+    @shutdown = new EventStream()
+    @state = new StateMachine(
+      beforeRun:
+        do_start: 'running'
+      running:
+        do_shutdown: 'afterRun'
+      afterRun: {}
+    )
+    @state.start('beforeRun')
 
-  # key_func :: object -> comparable object
-  @partition_ordered_list = (list_model, key_func, divider) ->
-    below = new ListModel()
-    above = new ListModel()
-    list_model.additions.observe((evt) ->
-      above.append(evt.value)
-    )
-    divider.observe((evt) ->
-      while above.list.length > 0 and key_func(above.get(0)) < evt
-        removed = above.remove(0)
-        below.append(removed)
-    )
-    return [below, above]
+  do_start: () ->
+    @state.transition('do_start')
+    @start.trigger_event('start!')
+
+  do_shutdown: () ->
+    @state.transition('do_shutdown')
+    @shutdown.trigger_event('shutdown!')
 
 class Ticker extends EventStream
 
@@ -227,6 +251,6 @@ class Ticker extends EventStream
     super.trigger_close()
 
 exports = if exports? then exports else {}
-exports.EventStream = EventStream
-exports.Observer    = Observer
-exports.Ticker      = Ticker
+exports.EventStream  = EventStream
+exports.Observer     = Observer
+exports.Ticker       = Ticker

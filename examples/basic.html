@@ -7,31 +7,36 @@
 		<script type="text/javascript" src="../build/debuggee.js"></script>
 		<script type="text/javascript" src="../build/browser.js"></script>
 		<script type="text/javascript">
-			eswindow.load.observe(function() {
+			env = new BrowserEnvironment()
+			env.start.observe(function() {
+				env.from_event(window, 'load').observe(function() {
+					
+					// do stuff with text field value...
+					var formValue = eswindow.from_form_value(document.getElementById('foo'), ['keyup', 'paste']);
 
-				// do stuff with text field value...
-				var formValue = eswindow.from_form_value(document.getElementById('foo'), ['keyup', 'paste']);
+					var empty = formValue.map(function(v){return v.length == 0});
+					var disabled = empty.map(function(e){return e ? 'disable' : ''});
+					eswindow.bind_value(disabled, document.getElementById('send'), 'disabled')
 
-				var empty = formValue.map(function(v){return v.length == 0});
-				var disabled = empty.map(function(e){return e ? 'disable' : ''});
-				eswindow.bind_value(disabled, document.getElementById('send'), 'disabled')
+					var windowTitle = formValue.map(function(v) { return v + (empty.value ? '' : ' | ') + 'Reactive Demo' });
+					eswindow.bind_value(windowTitle, document, 'title');
 
-				var windowTitle = formValue.map(function(v) { return v + (empty.value ? '' : ' | ') + 'Reactive Demo' });
-				eswindow.bind_value(windowTitle, document, 'title');
+					// do stuff with clicks...
+					var clicks = eswindow.from_event(document.getElementById('send'), 'click');
+					var clickCounter = clicks.fold(0, function(x, evt) { return x+1 });
 
-				// do stuff with clicks...
-				var clicks = eswindow.from_event(document.getElementById('send'), 'click');
-				var clickCounter = clicks.fold(0, function(x, evt) { return x+1 });
+					clicks.log();
 
-				clicks.log();
+					eswindow.bind_value(clickCounter, document.getElementById('clickcounter'), 'innerText');
 
-				eswindow.bind_value(clickCounter, document.getElementById('clickcounter'), 'innerText');
+					// do stuff with timer...
+					var ticker = new Ticker(1000);
+					eswindow.bind_value(ticker, document.getElementById('pagetimer'), 'innerText');
 
-				// do stuff with timer...
-				var ticker = new Ticker(1000);
-				eswindow.bind_value(ticker, document.getElementById('pagetimer'), 'innerText');
-
-			});
+				});
+			})
+			Debuggee.initialize('ws://localhost:8000/debuggee', env)
+			env.do_start()
 		</script>
 	</head>
 	<body>
