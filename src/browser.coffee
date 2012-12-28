@@ -69,4 +69,8 @@ class ESWindow
     streams = (eswindow.from_event(element, event_name) for event_name in event_names)
     return EventStream.merge(streams, element.value).map((evt) -> element.value)
 
+Debuggee.initialize('ws://localhost:8000/debuggee', window.location.href) # TODO: uh, yeah. coffeescript compile arguments for dev/prod?
 eswindow = new ESWindow(window)
+eswindow.unload.observe((evt) ->
+  Debuggee.shutdown()
+)

@@ -44,34 +44,34 @@ class EventStream
     @observers = []
     @closed = false
     @value = initial_value # optional
+    Debuggee.new_stream(this)
 
   toString: ->
     return "#<EventStream>"
 
   add_observer: (observer) ->
     @observers.push(observer)
-
-  remove_observer: (observer) ->
-    ind = @observers.indexOf(observer)
-    if ind == -1
-      return null
-    else
-      return @observers.splice(ind, 1)[0]
+    Debuggee.new_observer(observer, this)
 
   trigger_event: (event) ->
     if not @closed
       @value = event
+      Debuggee.event_emitted(this, event)
       for observer in @observers
+        Debuggee.start_consume(event, observer)
         observer.on_event(event)
+        Debuggee.end_consume()
 
   trigger_error: (error) ->
     if not @closed
+      # TOTHINK: refactor (otherevents)
       for observer in @observers
         observer.on_error(error)
 
   # TODO: make close state actually mean something (?)
   trigger_close: (reason) ->
     @closed = true
+    # TOTHINK: refactor (otherevents)
     for observer in @observers
       observer.on_close(reason)
 
@@ -83,7 +83,7 @@ class EventStream
   map: (func, initial) ->
     if initial
       mapped = new EventStream(initial)
-    else if typeof this.value != 'undefined'
+    else if this.value?
       mapped = new EventStream(func(this.value))
     else
       mapped = new EventStream()
@@ -96,7 +96,7 @@ class EventStream
     return mapped
 
   filter: (func) ->
-    if typeof this.value != 'undefined'
+    if this.value?
       filtered = new EventStream(this.value)
     else
       filtered = new EventStream()
@@ -146,12 +146,12 @@ class EventStream
 
   log: (name) ->
     repr = if name then name else this.toString()
-    if typeof this.value != 'undefined'
-      console.log("#{repr}:initial: #{this.value}")
+    if this.value?
+      console.log("#{repr}:initial:", this.value)
     return this.observe(
-      (event) -> console.log("#{repr}:event: #{event}"),
-      (error) -> console.log("#{repr}:error: #{error}"),
-      (reason) -> console.log("#{repr}:close: #{reason}")
+      (event) -> console.log("#{repr}:event:", event),
+      (error) -> console.log("#{repr}:error:", error),
+      (reason) -> console.log("#{repr}:close:", reason)
     )
 
 class Observer
@@ -165,13 +165,13 @@ class Observer
     @event_cb(event)
 
   on_error: (error) ->
-    if typeof @error_cb != 'undefined'
+    if @error_cb?
       @error_cb(error)
     else
-      console.error(reason)
+      throw error
 
   on_close: (reason) ->
-    if typeof @close_cb != 'undefined'
+    if @close_cb?
       @close_cb(reason)
 
 # singleton
@@ -225,3 +225,8 @@ class Ticker extends EventStream
   trigger_close: () ->
     closed = true
     super.trigger_close()
+
+exports = if exports? then exports else {}
+exports.EventStream = EventStream
+exports.Observer    = Observer
+exports.Ticker      = Ticker
