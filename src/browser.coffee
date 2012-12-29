@@ -1,42 +1,52 @@
 # TODO: factor into socket family...?
 
-class WebSocketStream
+class WebSocketStream extends EventStream
 
-  ###
-  @url: ws:// url to connect to
-  @stream: EventStream of strings. event values will be sent across the socket
-    every time an event is triggered.
-  ###
-  constructor: (@url, @stream) ->
-    @socket = new WebSocket(@url)
-    @state = new StateMachine(
-      closed:
-        connect: 'connecting'
-      connecting:
-        connected: 'open'
-      open:
-        close: 'closing'
-      closing:
-        closed: 'closed'
+  # this is the primary interface.
+  # connect :: (url, stream) -> Future[WebSocketStream]
+  # the future returns once it has connected.
+  @connect: (url, stream) ->
+    open_socket = new Future()
+    socket = new WebSocket(url)
+    socket.addEventListener('open', () ->
+      open_socket.trigger_event(new WebSocketStream(socket, stream))
+    )
+    return open_socket
+
+  # private constructor
+  constructor: (@socket, @stream) ->
+    if @socket.readyState != WebSocket.OPEN
+      throw 'invalid argument'
+    # send stream's messages over the socket
+    @stream.observe(
+      ((evt) =>
+        if not @closed
+          @socket.send(evt)
+        else
+          throw "can't send data over a closed websocket"
+      ),
+      ((err) =>
+        throw {
+          msg: 'tried to send error over websocket',
+          err: err 
+        }
+      ),
+      (close) => @socket.close()
+    )
+    # react to events coming over the socket
+    @socket.addEventListener('message', (evt) =>
+      @trigger_event(evt.data)
+    )
+    @socket.addEventListener('close', (evt) =>
+      @trigger_close(evt)
+    )
+    @socket.addEventListener('error', (evt) =>
+      @trigger_error(evt)
     )
 
-    @socket.addEventListener('message',
-      (evt) => this.trigger_event(evt.data)
-    )
-    @socket.addEventListener('error',
-      (evt) => this.trigger_error(evt) # can't find exactly what this object will be
-    )
-    @socket.addEventListener('close',
-      (evt) =>
-        console.log('websocket closed!')
-        this.trigger_close(evt) # CloseEvent contains reason information
-    )
-
-  send: (data) ->
-    @socket.send(data)
-
-  close: () ->
+  close: (reason) ->
     @socket.close()
+    @trigger_close(reason)
 
 class ElemDimensions extends EventStream
 

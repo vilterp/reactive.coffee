@@ -1,5 +1,6 @@
 if require?
   dbg = require('./debuggee')
+  require('lodash')
 
 Debuggee = if dbg? then dbg.Debuggee else Debuggee
 
@@ -10,7 +11,7 @@ class EventStream
 
   @merge: (streams, initial_value) ->
     merged = new EventStream()
-    if initial_value
+    if initial_value?
       merged.value = initial_value
     reasons = []
     for stream in streams
@@ -24,6 +25,77 @@ class EventStream
         )
       )
     return merged
+
+  ###
+  e.g.
+  EventStream.multiplex({
+    'additions': additions,
+    'deletions': deletions,
+    ...
+  }); 
+      => a stream with events:
+    {name: 'additions', body: ...}
+    {name: 'deletions', body: ...}
+  ###
+  @multiplex: (streams) ->
+    transformed = []
+    # TODO: refactor with map() or something
+    for name, stream of streams
+      # add name
+      with_name = stream.map((evt) =>
+        obj = {}
+        obj[stream_key] = name
+        obj[body_key] = evt
+        return obj
+      )
+      # add errors and closes
+      errors_included = new EventStream()
+      with_name.observe(
+        (evt) -> errors_included.trigger_event(evt),
+        ((err) ->
+          errors_included.trigger_event(
+            stream_name: name
+            error:       err
+          )
+        ),
+        ((reason) ->
+          errors_included.trigger_event(
+            stream_name: name
+            close:       reason
+          )
+        )
+      )
+      # add
+      transformed.push(errors_included)
+    return EventStream.merge(transformed)
+
+  ###
+  Given a multiplexed stream, demultiplex it into a dictionary
+  where the keys are names of streams and the values are streams.
+  ###
+  # TODO: initial values not dropped.
+  # TODO: refactor -- this is not very elegant.
+  @demultiplex: (stream, expected_keys) ->
+    demultiplexed = {}
+    for key in expected_keys
+      demultiplexed[key] = new EventStream()
+    stream.observe(
+      ((evt) => demultiplexed[evt[name_key]].trigger_event(evt[body_key])),
+    )
+    # take care of error and close events
+    retval = {}
+    for key in expected_keys
+      es = new EventStream()
+      demultiplexed[key].observe((evt) ->
+        if evt.close?
+          es.trigger_close(evt.close)
+        else if evt.error?
+          es.trigger_error(evt.error)
+        else if evt.body?
+          es.trigger_event(evt.body)
+      )
+      retval[key] = es
+    return retval
 
   @derived: (streams, func) ->
     merged = EventStream.merge(streams)
@@ -52,7 +124,7 @@ class EventStream
     # all event streams created before debuggee is initialized are excluded
     @debug_excluded = not Debuggee.is_initialized
     if not @debug_excluded
-      Debuggee.instance().new_stream(this)
+      Debuggee.instance().new_streams.trigger_event(this)
 
   toString: ->
     return "#<EventStream>"
@@ -60,16 +132,25 @@ class EventStream
   add_observer: (observer) ->
     @observers.push(observer)
     if not @debug_excluded
-      Debuggee.instance().new_observer(observer, this)
+      Debuggee.instance().new_observers.trigger_event(
+        stream: this
+        observer: observer
+      )
 
   trigger_event: (event) ->
     if not @closed
       @value = event
       if not @debug_excluded
-        Debuggee.instance().event_emitted(this, event)
+        Debuggee.instance().event_emitted.trigger_event(
+          source: this
+          event: event
+        )
       for observer in @observers
         if not @debug_excluded
-          Debuggee.instance().start_consume(event, observer)
+          Debuggee.instance().event_consumed.trigger_event(
+            event: event
+            observer: observer
+          )
         observer.on_event(event)
         if not @debug_excluded
           Debuggee.instance().end_consume()
@@ -191,6 +272,24 @@ class Observer
   on_close: (reason) ->
     if @close_cb?
       @close_cb(reason)
+
+class Future extends EventStream
+
+  constructor: () ->
+    super()
+
+  trigger_event: (evt) ->
+    super(evt)
+    @trigger_close('future fired')
+
+  andthen: (fun) ->
+    next = new Future()
+    @observe(
+      (evt) -> next.trigger_event(evt),
+      (err) -> next.trigger_error(err),
+      (reason) -> next.trigger_close(reason)
+    )
+    return next
 
 class Environment
 

@@ -36,7 +36,9 @@
 				});
 			})
 			Debuggee.initialize('ws://localhost:8000/debuggee', env)
-			env.do_start()
+							.andthen(function(){
+								env.do_start();
+							});
 		</script>
 	</head>
 	<body>

@@ -1,5 +1,8 @@
 # import WebSocketStream
 
+# convention: call @state.transition(...) before sending something on socket,
+#   so illegal state error will happen before we try to send something
+
 class Debuggee
 
 	@initialize: (server_url, env) ->
@@ -33,83 +36,84 @@ class Debuggee
 		@consumption_id = 0
 		@consumptions = []
 
+		# these are public
+		@new_streams    = new EventStream()
+		@new_observers  = new EventStream()
+		@event_emitted  = new EventStream()
+		@event_consumed = new EventStream()
+
+		multiplexed = EventStream.multiplex(
+			new_streams:    @mapped_NS()
+			new_observers:  @mapped_NO()
+			event_emitted:  @mapped_EE()
+			event_consumed: @mapped_EC()
+		)
+
+		# state machine to make sure we don't
+		# do anything illegal...
 		@state = new StateMachine(
 			initial:
+				connect: 'connecting'
+			connecting:
+				connected: 'connected'
+			connected:
 				sendRegistration: 'regWait'
 			regWait:
 				regDone: 'running'
 			running:
-				sendEventEmitted: 'running'
-				sendNewStream: 'running'
-				# TOTHINK: refactor (otherevents)
-				sendStreamClosed: 'running'
-				sendStreamError: 'running'
-				# / TOTHINK
-				sendNewObserver: 'running'
-				sendEventConsumed: 'running'
-				# TODO: error, close
 				shutdown: 'done'
 			done: {}
 		)
 		@state.start('initial')
-		@transport = new WebSocketStream(server_url)
-		@transport.send(env.id_info)
-		@state.transition('sendRegistration')
-		@transport.observe((msg) =>
-			if @state.state == 'regWait'
-				if msg == DebugProtocol.REG_ACK
+
+		# connect to debug server...
+		return WebSocketStream.connect(server_url, multiplexed)
+									 				.andthen((transport) =>
+			@state.transition('connected')
+			# send registration....
+			@state.transition('sendRegistration')
+			transport.send(env.id_info)
+			transport.observe((msg) =>
+				if @state.state == 'regWait' and msg == 'ok'
 					@state.transition('regDone')
+					@is_initialized = true
+					return this
 				else
 					throw 'Protocol error!' # ...?
-			else
-				throw 'Protocol error!' # ...?
+			)
 		)
-		@is_initialized = true
 
-	send: (edge_name, obj) ->
-		msg =
-			type: edge_name
-			body: obj
-		@transport.send(JSON.stringify(msg))
-		@state.transition(edge_name)
-
-	new_stream: (stream) ->
-		obj =
+	mapped_NS: () ->
+		@new_streams.map((stream) =>
 			id: @streams.add(stream)
-			created: 0 # TODO: consumptions ... start_consumption(), end_consumption()? 
+			created: @current_consumption()
 			type: stream.constructor.name # wut wut
-		@send('sendNewStream', obj)
+		)
 
-	new_observer: (observer, stream) ->
-		stream_id = @streams.get_id(stream)
-		obj =
-			id: @observers.add(observer)
-			stream_id: stream_id
-			consumption_id: 0 # TODO: consumptions
-			type: observer.constructor.name
-		@send('sendNewObserver', obj)
+	mapped_NO: () ->
+		@new_observers.map((evt) =>
+			id: @observers.add(evt.observer)
+			stream_id: @streams.get_id(evt.stream)
+			consumption_id: @current_consumption()
+			type: evt.observer.constructor.name
+		)
 
-	event_emitted: (stream, event) ->
-		stream_id = @streams.get_id(stream)
-		obj =
-			id: @events.add(event)
-			emitter: stream_id
+	mapped_EE: () ->
+		@event_emitted.map((evt) =>
+			id: @events.add(evt.event)
+			emitter: @streams.get_id(evt.stream)
+			consumption: @current_consumption() # could be null
 			time: new Date()
-			data: event
-		@send('sendEventEmitted', obj)
+			data: evt.event
+		)
 
-	start_consume: (event, observer) ->
-		event_id = @events.get_id(event)
-		observer_id = @observers.get_id(observer)
-		obj =
+	mapped_EC: () ->
+		@event_consumed.map((evt) =>
 			id: @push_consumption()
-			event_id: event_id
-			observer_id: observer_id
+			event_id: @events.get_id(evt.event)
+			observer_id: @observers.get_id(evt.observer)
 			time: new Date()
-		@send('sendEventConsumed', obj)
-
-	end_consume: () ->
-		@pop_consumption()
+		)
 
 	push_consumption: () ->
 		retval = @consumption_id
@@ -117,35 +121,21 @@ class Debuggee
 		@consumption_id += 1
 		return retval
 
+	end_consume: () ->
+		@pop_consumption()
+
 	pop_consumption: () ->
 		if @consumptions.length == 0
 			throw 'consumptions stack empty'
 		return @consumptions.pop()
 
-	# TOTHINK: refactor (otherevents)
-	stream_closed: (stream, reason) ->
-		stream_id = @streams.get_id(stream)
-		obj =
-			stream_id: stream_id
-			consumption_id: 0 # TODO: consumptions
-			reason: JSON.stringify(reason) # TODO: test...
-		@send('sendStreamClosed', obj)
-
-	# TOTHINK: refactor (otherevents)
-	stream_error: (stream, error) ->
-		stream_id = @streams.get_id(stream)
-		obj =
-			stream_id: stream_id
-			consumption_id: 0 # TODO: consumptions
-			error:
-				type: error.constructor.name
-				data: JSON.stringify(error)
-		@send('sendStreamError', obj)
+	current_consumption: () ->
+		if @consumptions.length == 0
+			return null
+		return @consumptions[@consumptions.length-1] # grr
 
 	shutdown: () ->
 		@state.transition('shutdown')
-
-	# ===== END static methods =================================
 
 class IdMap
 
