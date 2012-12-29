@@ -1,57 +1,75 @@
-# import WebSocketStream
+# TODO: refactor to make usable to debug node programs
 
 # convention: call @state.transition(...) before sending something on socket,
 #   so illegal state error will happen before we try to send something
 
+
+###
+Things get kind of tricky in here. How to use this class:
+1. create environment
+2. add listener on myEnvironment.start
+3. call Debuggee.initialize(debug server url, myEnvironment)
+4. bind a listener to the future returned by #4, and in it call
+   myEnvironment.do_start() (All because we don't want to do
+   anything until the debugger is initialized)
+###
+
 class Debuggee
 
+	# :: (url, Environment) -> Future[Debuggee]
 	@initialize: (server_url, env) ->
 		if Debuggee.singleton?
 			throw 'already initialized'
-		Debuggee.singleton = new Debuggee(server_url, env)
-		# set up primordial event streams...
-		Debuggee.singleton.new_stream(env.start)
-		Debuggee.singleton.new_stream(env.shutdown)
-		for obs in env.start.observers
-			Debuggee.singleton.new_observer(obs)
-		for obs in env.shutdown.observers
-			Debuggee.singleton.new_observer(obs)
-		# now, when the 'start!' event fires, it'll go through these
+		return Debuggee.create(server_url, env)
+									 .andthen((inst) ->
+			Debuggee.singleton = inst
+			# set up primordial event streams...
+			inst.new_stream(env.start)
+			inst.new_stream(env.shutdown)
+			for obs in env.start.observers
+				inst.new_observer(obs)
+			for obs in env.shutdown.observers
+				inst.new_observer(obs)
+			# now, when the 'start!' event fires, it'll go through these
+			return inst
+		)
+
+	@is_initialized = false
 
 	@instance: () ->
 		if not Debuggee.singleton?
 			throw 'not initialized'
 		return Debuggee.singleton
 
-	@is_initialized = false
-
-	constructor: (server_url, env) ->
-
+	# like a constructor, but returns a Future[Debugee] instead of a Debuggee
+	@create: (server_url, env) ->
+		it = new Debuggee()
 		if env.state.current_state() != 'beforeRun'
 			throw 'must call Debuggee.initialize() before calling env.start()'
 
-		@streams = new IdMap()
-		@observers = new IdMap()
-		@events = new IdMap()
-		@consumption_id = 0
-		@consumptions = []
+		it.streams = new IdMap()
+		it.observers = new IdMap()
+		it.events = new IdMap()
+		it.consumption_id = 0
+		it.consumptions = []
 
 		# these are public
-		@new_streams    = new EventStream()
-		@new_observers  = new EventStream()
-		@event_emitted  = new EventStream()
-		@event_consumed = new EventStream()
+		it.new_streams    = new EventStream()
+		it.new_observers  = new EventStream()
+		it.event_emitted  = new EventStream()
+		it.event_consumed = new EventStream()
 
 		multiplexed = EventStream.multiplex(
-			new_streams:    @mapped_NS()
-			new_observers:  @mapped_NO()
-			event_emitted:  @mapped_EE()
-			event_consumed: @mapped_EC()
+			new_streams:    it.mapped_NS()
+			new_observers:  it.mapped_NO()
+			event_emitted:  it.mapped_EE()
+			event_consumed: it.mapped_EC()
 		)
+		multiplexed.log('multiplexed')
 
 		# state machine to make sure we don't
 		# do anything illegal...
-		@state = new StateMachine(
+		it.state = new StateMachine(
 			initial:
 				connect: 'connecting'
 			connecting:
@@ -64,24 +82,32 @@ class Debuggee
 				shutdown: 'done'
 			done: {}
 		)
-		@state.start('initial')
+		it.state.log('state')
+		it.state.start('initial')
 
 		# connect to debug server...
-		return WebSocketStream.connect(server_url, multiplexed)
-									 				.andthen((transport) =>
-			@state.transition('connected')
+		it.state.transition('connect')
+		conn = WebSocketStream.connect(server_url, multiplexed)
+		conn.log('conn')
+		dbe  = conn.andthen((transport) =>
+			it.state.transition('connected')
 			# send registration....
-			@state.transition('sendRegistration')
-			transport.send(env.id_info)
+			it.state.transition('sendRegistration')
+			multiplexed.trigger_event(env.id_info) # TODO: this is janky.
 			transport.observe((msg) =>
-				if @state.state == 'regWait' and msg == 'ok'
-					@state.transition('regDone')
-					@is_initialized = true
-					return this
+				if it.state.state == 'regWait' and msg == 'ok'
+					it.state.transition('regDone')
+					it.is_initialized = true
+					return it
 				else
 					throw 'Protocol error!' # ...?
 			)
 		)
+		dbe.log('dbe')
+
+		return dbe
+
+	constructor: () -> # must go through create!
 
 	mapped_NS: () ->
 		@new_streams.map((stream) =>

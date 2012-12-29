@@ -43,5 +43,5 @@ router.mount('/debuggee', null, (req) ->
 )
 debuggee_conns = debuggee_reqs.map(accept)
 
-debuggee_reqs.log()
-debuggee_conns.log()
+debuggee_reqs.map((x) -> x.constructor.name).log('debuggee_reqs')
+debuggee_conns.map((x) -> x.constructor.name).log('debuggee_conns')

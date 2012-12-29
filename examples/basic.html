@@ -7,6 +7,20 @@
 		<script type="text/javascript" src="../build/debuggee.js"></script>
 		<script type="text/javascript" src="../build/browser.js"></script>
 		<script type="text/javascript">
+
+			// console.log('commencing ws test...');
+			// var ws = new WebSocket('ws://localhost:8000/debuggee')
+			// ws.onclose = function() {
+			// 	console.log('close');
+			// };
+			// ws.onopen = function() {
+			// 	console.log('open');
+			// }
+			// ws.onerror = function() {
+			// 	console.log('error');
+			// }
+			// console.log('listeners initialized...');
+
 			env = new BrowserEnvironment()
 			env.start.observe(function() {
 				env.from_event(window, 'load').observe(function() {
@@ -34,11 +48,16 @@
 					eswindow.bind_value(ticker, document.getElementById('pagetimer'), 'innerText');
 
 				});
-			})
-			Debuggee.initialize('ws://localhost:8000/debuggee', env)
-							.andthen(function(){
-								env.do_start();
-							});
+			});
+			
+			var df = Debuggee.create('ws://localhost:8000/debuggee', env)
+			df.log('df')
+
+			// Debuggee.initialize('ws://localhost:8000/debuggee', env)
+			// 				.andthen(function(){
+			// 					console.log('hello?');
+			// 					env.do_start();
+			// 				});
 		</script>
 	</head>
 	<body>

@@ -11,8 +11,8 @@ class StateMachine extends EventStream
 		@transitions = {}
 		@state = null
 		# create initial states...
-		for from of states
-			for edge_name, to of from
+		for from, transitions of states
+			for edge_name, to of transitions
 				@add_transition(from, to, edge_name)
 
 	add_transition: (from, to, edge_name) ->
@@ -25,20 +25,26 @@ class StateMachine extends EventStream
 	start: (start_st) ->
 		if not @transitions[start_st]?
 			throw "no state '#{start_st}'"
-		started = true
+		@started = true
 		@state = start_st
 
 	transition: (edge_name) ->
 		if not @started
 			throw "not started"
 		if not @transitions[@state][edge_name]
-			this.trigger_error("no edge '#{edge_name}' from state '#{@state}'")
+			err = "no edge '#{edge_name}' from state '#{@state}'"
+			this.trigger_error(err)
+			throw err # this is weird.
 		else
 			from = @state
 			@state = @transitions[@state][edge_name]
 			this.trigger_event(new StateTransition(from, @state, edge_name))
 
-	current_state: () -> @state
+	current_state: () ->
+		if @started
+			return @state
+		else
+			throw 'not started'
 
 class StateTransition
 

@@ -277,17 +277,25 @@ class Future extends EventStream
 
   constructor: () ->
     super()
+    @fired = false
 
   trigger_event: (evt) ->
     super(evt)
+    @fired = true
     @trigger_close('future fired')
+
+  trigger_close: (reason) ->
+    if @fired
+      super reason
+    else
+      throw 'future closed before fired'
 
   andthen: (fun) ->
     next = new Future()
+    # TODO: would be nice to throw real error objects or something...
     @observe(
-      (evt) -> next.trigger_event(evt),
-      (err) -> next.trigger_error(err),
-      (reason) -> next.trigger_close(reason)
+      (evt) -> next.trigger_event(fun(evt)),
+      (err) -> throw "error triggered on future: #{err}"
     )
     return next
 
@@ -350,6 +358,6 @@ class Ticker extends EventStream
     super.trigger_close()
 
 exports = if exports? then exports else {}
-exports.EventStream  = EventStream
-exports.Observer     = Observer
-exports.Ticker       = Ticker
+exports.EventStream     = EventStream
+exports.Observer        = Observer
+exports.Ticker          = Ticker

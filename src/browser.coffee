@@ -11,10 +11,14 @@ class WebSocketStream extends EventStream
     socket.addEventListener('open', () ->
       open_socket.trigger_event(new WebSocketStream(socket, stream))
     )
+    socket.addEventListener('close', (evt) ->
+      open_socket.trigger_error(evt)
+    )
     return open_socket
 
   # private constructor
   constructor: (@socket, @stream) ->
+    super()
     if @socket.readyState != WebSocket.OPEN
       throw 'invalid argument'
     # send stream's messages over the socket
