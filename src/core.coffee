@@ -1,6 +1,8 @@
+# TODO: Transducer (or something) class for things that both produce and consume
+# e.g. map, fold, filter, etc
+
 if require?
   dbg = require('./debuggee')
-  require('lodash')
 
 Debuggee = if dbg? then dbg.Debuggee else Debuggee
 

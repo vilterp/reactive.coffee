@@ -67,7 +67,7 @@ class TcpSocket extends es.EventStream
 		sock.connect(port, host)
 		connected = new es.Future()
 		sock.on('connect', () ->
-			connected.trigger_event(new TcpSocket(sock, stream))
+			connected.trigger_event(new TcpSocket(sock))
 		)
 		sock.on('error', (err) ->
 			if not connected.fired
@@ -77,6 +77,7 @@ class TcpSocket extends es.EventStream
 
 	constructor: (@node_socket) ->
 		super()
+		# TODO: assert that it's connected
 		# react to events coming over the socket
 		@node_socket.on('data', (buf) =>
 			@trigger_event(buf)
