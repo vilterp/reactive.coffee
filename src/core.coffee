@@ -127,7 +127,7 @@ class EventStream
       Debuggee.instance().new_streams.trigger_event(this)
 
   toString: ->
-    return "#<EventStream>"
+    return "#<#{this.constructor.name}>"
 
   add_observer: (observer) ->
     @observers.push(observer)
@@ -279,6 +279,8 @@ class Future extends EventStream
     super()
     @fired = false
 
+  toString: () -> "#<Future (#{if @fired then 'fired' else 'not fired'})>"
+
   trigger_event: (evt) ->
     super(evt)
     @fired = true
@@ -297,7 +299,7 @@ class Future extends EventStream
       (evt) -> next.trigger_event(fun(evt)),
       (err) -> throw "error triggered on future: #{err}"
     )
-    return next
+    return next 
 
 class Environment
 
@@ -339,9 +341,6 @@ class Ticker extends EventStream
     @paused = new EventStream(false)
     this.tick()
 
-  toString: ->
-    return "#<Ticker>"
-
   tick: ->
     if not @closed and not @paused.value
       this.trigger_event(@tick_num)
@@ -359,5 +358,7 @@ class Ticker extends EventStream
 
 exports = if exports? then exports else {}
 exports.EventStream     = EventStream
+exports.Future          = Future
 exports.Observer        = Observer
 exports.Ticker          = Ticker
+exports.Environment     = Environment
