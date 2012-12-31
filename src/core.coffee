@@ -38,14 +38,14 @@ class EventStream
     {name: 'deletions', body: ...}
   ###
   @multiplex: (streams) ->
-    transformed = []
-    # TODO: refactor with map() or something
-    for name, stream of streams
+    names = Object.keys(streams)
+    transformed = names.map((name) ->
+      stream = streams[name]
       # add name
       with_name = stream.map((evt) =>
-        obj = {}
-        obj[stream_key] = name
-        obj[body_key] = evt
+        obj =
+          stream_name: name
+          body: evt
         return obj
       )
       # add errors and closes
@@ -65,8 +65,8 @@ class EventStream
           )
         )
       )
-      # add
-      transformed.push(errors_included)
+      return errors_included
+    )
     return EventStream.merge(transformed)
 
   ###
@@ -80,7 +80,7 @@ class EventStream
     for key in expected_keys
       demultiplexed[key] = new EventStream()
     stream.observe(
-      ((evt) => demultiplexed[evt[name_key]].trigger_event(evt[body_key])),
+      ((evt) => demultiplexed[evt['stream_name']].trigger_event(evt[body_key])),
     )
     # take care of error and close events
     retval = {}
@@ -117,6 +117,7 @@ class EventStream
     now_signal.ticker = ticker # TODO meh
     return now_signal
 
+  # TODO: initialize with name!
   constructor: (initial_value) ->
     @observers = []
     @closed = false

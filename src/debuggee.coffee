@@ -24,12 +24,16 @@ class Debuggee
 									 .andthen((inst) ->
 			Debuggee.singleton = inst
 			# set up primordial event streams...
-			inst.new_stream(env.start)
-			inst.new_stream(env.shutdown)
-			for obs in env.start.observers
-				inst.new_observer(obs)
-			for obs in env.shutdown.observers
-				inst.new_observer(obs)
+			inst.new_streams.trigger_event(env.start)
+			inst.new_streams.trigger_event(env.shutdown)
+			add_observers = (observers) ->
+				for obs in observers
+					inst.new_observers.trigger_event(
+						stream: obs.event_stream
+						observer: obs
+					)
+			add_observers(env.start.observers)
+			add_observers(env.shutdown.observers)
 			# now, when the 'start!' event fires, it'll go through these
 			return inst
 		)
@@ -87,55 +91,56 @@ class Debuggee
 
 		# connect to debug server...
 		it.state.transition('connect')
-		conn = WebSocketStream.connect(server_url, multiplexed)
-		conn.log('conn')
-		dbe  = conn.andthen((transport) =>
+		# TODO: protocols & futures & andthen are weird.
+		conn = WebSocketStream.connect(server_url, multiplexed.map(JSON.stringify))
+		reg = new Future()
+		conn.andthen((transport) =>
 			it.state.transition('connected')
 			# send registration....
 			it.state.transition('sendRegistration')
-			multiplexed.trigger_event(env.id_info) # TODO: this is janky.
+			console.log('id_info:', env.id_info)
+			transport.stream.trigger_event(env.id_info) # TODO: this is janky.
 			transport.observe((msg) =>
 				if it.state.state == 'regWait' and msg == 'ok'
 					it.state.transition('regDone')
-					it.is_initialized = true
-					return it
+					Debuggee.is_initialized = true
+					reg.trigger_event(it)
 				else
 					throw 'Protocol error!' # ...?
 			)
 		)
-		dbe.log('dbe')
-
-		return dbe
+		return reg
 
 	constructor: () -> # must go through create!
 
 	mapped_NS: () ->
 		@new_streams.map((stream) =>
-			id: @streams.add(stream)
-			created: @current_consumption()
-			type: stream.constructor.name # wut wut
+			stream_id: @streams.add(stream)
+			consumption_id: @current_consumption()
+			stream_type: stream.constructor.name # wut wut
 		)
 
 	mapped_NO: () ->
 		@new_observers.map((evt) =>
-			id: @observers.add(evt.observer)
+			observer_id: @observers.add(evt.observer)
 			stream_id: @streams.get_id(evt.stream)
 			consumption_id: @current_consumption()
-			type: evt.observer.constructor.name
+			observer_type: evt.observer.constructor.name
 		)
 
 	mapped_EE: () ->
 		@event_emitted.map((evt) =>
-			id: @events.add(evt.event)
-			emitter: @streams.get_id(evt.stream)
-			consumption: @current_consumption() # could be null
+			event_id: @events.add(evt.event)
+			stream_id: @streams.get_id(evt.stream)
+			consumption_id: @current_consumption() # could be null
 			time: new Date()
-			data: evt.event
+			# TODO: would be nice to send the whole thing, but have to avoid circular refs
+			event_data: evt.event.constructor.name
 		)
 
 	mapped_EC: () ->
 		@event_consumed.map((evt) =>
-			id: @push_consumption()
+			consumption_id: @push_consumption()
 			event_id: @events.get_id(evt.event)
 			observer_id: @observers.get_id(evt.observer)
 			time: new Date()

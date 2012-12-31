@@ -23,41 +23,38 @@
 
 			env = new BrowserEnvironment()
 			env.start.observe(function() {
-				env.from_event(window, 'load').observe(function() {
-					
+				// env.from_event(window, 'load').observe(function() {
+					console.log('initializing shit...');
 					// do stuff with text field value...
-					var formValue = eswindow.from_form_value(document.getElementById('foo'), ['keyup', 'paste']);
+					var formValue = env.from_form_value(document.getElementById('foo'), ['keyup', 'paste']);
 
 					var empty = formValue.map(function(v){return v.length == 0});
 					var disabled = empty.map(function(e){return e ? 'disable' : ''});
-					eswindow.bind_value(disabled, document.getElementById('send'), 'disabled')
+					env.bind_value(disabled, document.getElementById('send'), 'disabled')
 
 					var windowTitle = formValue.map(function(v) { return v + (empty.value ? '' : ' | ') + 'Reactive Demo' });
-					eswindow.bind_value(windowTitle, document, 'title');
+					env.bind_value(windowTitle, document, 'title');
 
 					// do stuff with clicks...
-					var clicks = eswindow.from_event(document.getElementById('send'), 'click');
+					var clicks = env.from_event(document.getElementById('send'), 'click');
 					var clickCounter = clicks.fold(0, function(x, evt) { return x+1 });
 
-					clicks.log();
+					clicks.log('clicks');
 
-					eswindow.bind_value(clickCounter, document.getElementById('clickcounter'), 'innerText');
+					env.bind_value(clickCounter, document.getElementById('clickcounter'), 'innerText');
 
 					// do stuff with timer...
-					var ticker = new Ticker(1000);
-					eswindow.bind_value(ticker, document.getElementById('pagetimer'), 'innerText');
+					// var ticker = new Ticker(1000);
+					// env.bind_value(ticker, document.getElementById('pagetimer'), 'innerText');
 
-				});
+				// });
 			});
-			
-			var df = Debuggee.create('ws://localhost:8000/debuggee', env)
-			df.log('df')
 
-			// Debuggee.initialize('ws://localhost:8000/debuggee', env)
-			// 				.andthen(function(){
-			// 					console.log('hello?');
-			// 					env.do_start();
-			// 				});
+			Debuggee.initialize('ws://localhost:8000/debuggee', env)
+							.andthen(function(){
+								console.log('hello?');
+								env.do_start();
+							});
 		</script>
 	</head>
 	<body>

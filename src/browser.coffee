@@ -96,5 +96,5 @@ class BrowserEnvironment extends Environment
     return source
 
   from_form_value: (element, event_names) ->
-    streams = (eswindow.from_event(element, event_name) for event_name in event_names)
+    streams = (@from_event(element, event_name) for event_name in event_names)
     return EventStream.merge(streams, element.value).map((evt) -> element.value)
