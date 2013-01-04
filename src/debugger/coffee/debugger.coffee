@@ -19,7 +19,6 @@ class Debugger
 			console.log('connected!')
 			streams = sock.map(JSON.parse).demultiplex(
 				['new_streams', 'new_observers', 'event_emitted', 'event_consumed'])
-			@streams.additions.log('streams.additions')
 			# RESOLVE IDs TO OBJECT REFERENCES (todo: handle nonexistent ids gracefully!)
 			streams.event_emitted.observe((evt) =>
 				stream = @stream_map[evt.stream_id]
@@ -62,12 +61,13 @@ class TableView
 
 	constructor: (@container, @list, @col_renderers) ->
 		cols = (cr[0] for cr in @col_renderers)
-		elements = @list.map((row) =>
+		elements = @list.map((ind, row) =>
 			(cr[1](row[cr[0]]) for cr in @col_renderers)
-		).map((row) ->
+		).map((ind, row) ->
 			row_el = document.createElement('tr')
 			for col in row
 				col_el = document.createElement('td')
+				col_el.innerText = col
 				row_el.appendChild(col_el)
 			return row_el
 		)
@@ -76,8 +76,8 @@ class TableView
 		head_row = document.createElement('tr')
 		for col in cols
 			col_el = document.createElement('td')
-			col_el.innerText = row
-			head_row.appendChild(row_header)
+			col_el.innerText = col
+			head_row.appendChild(col_el)
 		thead.appendChild(head_row)
 		@container.appendChild(thead)
 		# build, bind tbody
@@ -125,10 +125,29 @@ window.onload = () ->
 	console.log('hello?')
 	debuggee_id = parse_query_params(window.location.href).debuggee_id
 	dbg = new Debugger('localhost', 8000, debuggee_id)
-	ts = (x) -> x.toString()
+	ts = (x) -> x?.toString()
 	id = (x) -> x
-	crs =
-		id: ts
-		consumption: (c) -> c.id.tostring()
-		type: id
-	streams = new TableView(document.getElementById('event-streams'), dbg.streams, crs)
+	get_id = (x) -> x?.id?.toString()
+	new TableView(document.getElementById('streams'), dbg.streams, [
+		['id', ts],
+		['consumption', get_id],
+		['type', id]
+	])
+	new TableView(document.getElementById('observers'), dbg.observers, [
+		['id', ts],
+		['consumption', get_id],
+		['type', id]
+	])
+	new TableView(document.getElementById('events'), dbg.events, [
+		['id', ts],
+		['stream', get_id],
+		['consumption', get_id],
+		['data', id],
+		['time', ts]
+	])
+	new TableView(document.getElementById('consumptions'), dbg.consumptions, [
+		['id', ts],
+		['observer', get_id],
+		['event', get_id],
+		['time', ts]
+	])
