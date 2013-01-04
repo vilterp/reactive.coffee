@@ -1,13 +1,15 @@
 ws      = require 'websocket'
 express = require 'express'
 http    = require 'http'
-es      = require './core'
+es      = require '../core'
 
 args = require('optimist')
 				 .default('p', 8000).alias('p', 'port')
 				 .argv
 
 app = express()
+app.use(express.logger('short'))
+	 .use(express.static(__dirname + '/static'))
 
 connected = []
 
@@ -25,6 +27,11 @@ app.get('/connected', (req, res) ->
 	)
 	res.send(JSON.stringify(list))
 )
+# serve debugger interface
+app.get('/debugger', (req, res) ->
+	res.sendfile('./debugger.html')
+)
+
 # wrap express app in standard node http server
 # necessary for websockets compatibility, annoyingly...
 wrap_server = http.createServer(app)

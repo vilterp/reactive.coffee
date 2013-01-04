@@ -1,4 +1,6 @@
-class NodeEnvironment extends Environment
+es = require '../core/core'
+
+class NodeEnvironment extends es.Environment
 
 	constructor: () ->
 		super(process.args.join(' '))

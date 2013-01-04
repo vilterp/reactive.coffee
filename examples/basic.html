@@ -2,24 +2,9 @@
 <html>
 	<head>
 		<title>Reactive.coffee demo</title>
-		<script type="text/javascript" src="../build/core.js"></script>
-		<script type="text/javascript" src="../build/util.js"></script>
-		<script type="text/javascript" src="../build/debuggee.js"></script>
-		<script type="text/javascript" src="../build/browser.js"></script>
+		<script type="text/javascript" src="../build/browser/reactive.js"></script>
+		<script type="text/javascript" src="../build/browser/debuggee.js"></script>
 		<script type="text/javascript">
-
-			// console.log('commencing ws test...');
-			// var ws = new WebSocket('ws://localhost:8000/debuggee')
-			// ws.onclose = function() {
-			// 	console.log('close');
-			// };
-			// ws.onopen = function() {
-			// 	console.log('open');
-			// }
-			// ws.onerror = function() {
-			// 	console.log('error');
-			// }
-			// console.log('listeners initialized...');
 
 			env = new BrowserEnvironment()
 			env.start.observe(function() {

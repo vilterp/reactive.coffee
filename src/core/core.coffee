@@ -1,6 +1,5 @@
 if require?
   dbg = require('./debuggee')
-  require('lodash')
 
 Debuggee = if dbg? then dbg.Debuggee else Debuggee
 

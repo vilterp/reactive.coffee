@@ -1,5 +1,5 @@
 {
-	"name": "frp-viz",
+	"name": "reactive.coffee",
 	"version": "0.0.0",
 	"author": "Pete Vilter <pete.vilter@gmail.com>",
 	"description": "visualize events flowing through your event stream network...",
@@ -7,9 +7,11 @@
 	"dependencies": {
 		"coffee-script": "1.4.0",
 		"optimist": "0.3.5",
-		"websocket": "1.0.7"
+		"websocket": "1.0.7",
+		"express": "3.0.5"
 	},
-	"engines": {
-		"node": "0.8.x"
-	}
+	"bin": {
+		"reactive-debug-server": "./build/debugger/server.js"
+	},
+	"main": "build/node/node-all.js"
 }
