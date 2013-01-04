@@ -15,16 +15,13 @@ core: builddir $(CORE_SRC)
 browser: builddir core $(BROWSER_SRC)
 	if [ ! -d build/browser ]; then mkdir build/browser; fi
 	coffee -cb -o build $(BROWSER_SRC)
-	cat build/core/core.js build/core/models.js build/core/util.js build/browserenv.js > build/browser/reactive.js
-	cp build/core/debuggee.js build/browser/debuggee.js
+	cat build/core/core.js build/core/models.js build/core/util.js build/browserenv.js build/core/debuggee.js > build/browser/reactive.js
 
 node: builddir core $(NODE_SRC)
 	if [ ! -d build/node ]; then mkdir build/node; fi
 	coffee -cb -o build/node $(NODE_SRC)
 
 debugger: debugserver debugjs debugcss debughtml
-	coffee -cb -o build/debugger/static/js src/debugger/coffee
-	cp src/debugger/debugger.html build/debugger/static
 
 debuggerdir: builddir
 	if [ ! -d build/debugger ]; then mkdir build/debugger; fi
@@ -40,6 +37,7 @@ debugserver: debuggerdir node $(DEBUG_SERVER_SRC)
 debugjs: debuggerstatic browser $(DEBUGGER_SRC)
 	if [ ! -d build/debugger/static/js ]; then mkdir build/debugger/static/js; fi
 	coffee -cb -o build/debugger/static/js $(DEBUGGER_SRC)
+	cp build/browser/reactive.js build/debugger/static/js
 
 debugcss: debuggerstatic $(DEBUG_CSS)
 	cp $(DEBUG_CSS) build/debugger/static

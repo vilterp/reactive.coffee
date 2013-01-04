@@ -35,6 +35,7 @@ class EventStream
       => a stream with events:
     {name: 'additions', body: ...}
     {name: 'deletions', body: ...}
+  # see `demultiplex`, below
   ###
   @multiplex: (streams) ->
     names = Object.keys(streams)
@@ -67,34 +68,6 @@ class EventStream
       return errors_included
     )
     return EventStream.merge(transformed)
-
-  ###
-  Given a multiplexed stream, demultiplex it into a dictionary
-  where the keys are names of streams and the values are streams.
-  ###
-  # TODO: initial values not dropped.
-  # TODO: refactor -- this is not very elegant.
-  @demultiplex: (stream, expected_keys) ->
-    demultiplexed = {}
-    for key in expected_keys
-      demultiplexed[key] = new EventStream()
-    stream.observe(
-      ((evt) => demultiplexed[evt['stream_name']].trigger_event(evt[body_key])),
-    )
-    # take care of error and close events
-    retval = {}
-    for key in expected_keys
-      es = new EventStream()
-      demultiplexed[key].observe((evt) ->
-        if evt.close?
-          es.trigger_close(evt.close)
-        else if evt.error?
-          es.trigger_error(evt.error)
-        else if evt.body?
-          es.trigger_event(evt.body)
-      )
-      retval[key] = es
-    return retval
 
   @derived: (streams, func) ->
     merged = EventStream.merge(streams)
@@ -253,6 +226,35 @@ class EventStream
       (reason) -> console.log("#{repr}:close:", reason)
     )
 
+  ###
+  Given a multiplexed stream, demultiplex it into a dictionary
+  where the keys are names of streams and the values are streams.
+  ###
+  # TODO: initial values not dropped.
+  # TODO: refactor -- this is not very elegant.
+  demultiplex: (expected_keys) ->
+    demultiplexed = {}
+    for key in expected_keys
+      demultiplexed[key] = new EventStream()
+    @observe(
+      ((evt) => demultiplexed[evt['stream_name']].trigger_event(evt)),
+    )
+    # take care of error and close events
+    retval = {}
+    expected_keys.map((key) ->
+      es = new EventStream()
+      demultiplexed[key].observe((evt) ->
+        if evt.close?
+          es.trigger_close(evt.close)
+        else if evt.error?
+          es.trigger_error(evt.error)
+        else if evt.body?
+          es.trigger_event(evt.body)
+      )
+      retval[key] = es
+    )
+    return retval
+
 class Observer
 
   constructor: (@event_stream, @event_cb, @error_cb, @close_cb) ->
@@ -361,3 +363,4 @@ exports = if exports? then exports else {}
 exports.EventStream     = EventStream
 exports.Observer        = Observer
 exports.Ticker          = Ticker
+exports.Environment     = Environment

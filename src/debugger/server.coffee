@@ -1,7 +1,8 @@
-ws      = require 'websocket'
-express = require 'express'
-http    = require 'http'
-es      = require '../core'
+# TODO: better logging. color! use event streams! This is crappy.
+ws       = require 'websocket'
+express  = require 'express'
+http     = require 'http'
+reactive = require 'reactive.coffee'
 
 args = require('optimist')
 				 .default('p', 8000).alias('p', 'port')
@@ -26,10 +27,6 @@ app.get('/connected', (req, res) ->
 		id_info: dc.id_info
 	)
 	res.send(JSON.stringify(list))
-)
-# serve debugger interface
-app.get('/debugger', (req, res) ->
-	res.sendfile('./debugger.html')
 )
 
 # wrap express app in standard node http server
@@ -102,7 +99,7 @@ class DebuggeeConnection
 
 	constructor: (@id, @id_info, @conn) ->
 		@history = []
-		@debug_events = new es.EventStream()
+		@debug_events = new reactive.EventStream()
 		@closed = false
 		@debug_events.observe(
 			(evt) => @history.push(evt),

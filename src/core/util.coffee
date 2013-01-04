@@ -50,6 +50,31 @@ class StateTransition
 
 	constructor: (@from, @to, @edge_name) ->
 
+class IdMap
+
+	constructor: () ->
+		@id = 0
+		@map = {}
+
+	add: (obj) ->
+		@map[@id] = obj
+		retval = @id
+		@id += 1
+		return retval
+
+	remove: (obj) ->
+		for id, some_obj of @map
+			if some_obj == obj
+				delete @map[id]
+				return true
+		return false
+
+	get_id: (obj) ->
+		# FIXME: this is slow. grr javascript
+		for id, some_obj of @map
+			if some_obj == obj
+				return id
+		return null
 
 # only static methods
 class Util
@@ -78,4 +103,5 @@ class Util
 exports = if exports? then exports else {}
 exports.StateMachine    = StateMachine
 exports.StateTransition = StateTransition
+exports.IdMap           = IdMap
 exports.Util            = Util

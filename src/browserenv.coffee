@@ -6,6 +6,8 @@ class WebSocketStream extends EventStream
   # connect :: (url, stream) -> Future[WebSocketStream]
   # the future returns once it has connected.
   @connect: (url, stream) ->
+    if not stream?
+      stream = new EventStream()
     open_socket = new Future()
     socket = new WebSocket(url)
     socket.addEventListener('open', () ->

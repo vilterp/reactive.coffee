@@ -14,6 +14,9 @@ Things get kind of tricky in here. How to use this class:
    anything until the debugger is initialized)
 ###
 
+# TODO: don't return stream id -1
+# FIXME: getting some consumption_id: null where we shouldn't...
+
 class Debuggee
 
 	# :: (url, Environment) -> Future[Debuggee]
@@ -167,32 +170,6 @@ class Debuggee
 
 	shutdown: () ->
 		@state.transition('shutdown')
-
-class IdMap
-
-	constructor: () ->
-		@id = 0
-		@map = {}
-
-	add: (obj) ->
-		@map[@id] = obj
-		retval = @id
-		@id += 1
-		return retval
-
-	remove: (obj) ->
-		for id, some_obj of @map
-			if some_obj == obj
-				delete @map[id]
-				return true
-		return false
-
-	get_id: (obj) ->
-		# FIXME: this is slow. grr javascript
-		for id, some_obj of @map
-			if some_obj == obj
-				return id
-		return -1
 
 exports = if exports? then exports else {}
 exports.Debuggee = Debuggee
