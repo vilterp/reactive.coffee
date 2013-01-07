@@ -6,10 +6,39 @@
 		<script type="text/javascript" src="../build/browser/debuggee.js"></script>
 		<script type="text/javascript">
 
-			env = new BrowserEnvironment()
-			env.start.observe(function() {
+			function SenderWidget() {
+				this.input = new ElementModel('input', null, new DictModel({type: 'text'}));
+				this.value = this.input.form_value(['keyup', 'paste']);
+				var empty = this.value.map(function(v){v.length == 0}).distinct();
+				var disabled = empty.map(function(e){return e ? 'disable' : ''})
+				// TODO: this is a little too verbose... How to do something like android's xml files, or apple's nibs?
+				this.sendButton = new ElementModel('button', new ListModel(new TextNode('Send')), new DictModel({disabled: disabled}));
+				var val = this.value;
+				this.sendEvents = sendButton.event_stream('click').map(function(evt){
+					return new SendEvent(val.value);
+				});
+			}
+
+			function SendEvent(msg) {
+				this.msg = msg;
+			}
+			SendEvent.prototype.toString = function() {
+				return "#<SendEvent msg='" + this.msg + "'>";
+			}
+
+			function Logger(stream) {
+				var els = new ListModel();
+				stream.observe(function(evt) {
+					els.append(evt);
+				});
+				els.map() // LEfT OFF HERE
+				this.list = new ElementModel('ul', )
+			}
+
+			BrowserEnvironment.instance().start.observe(function() {
 				// env.from_event(window, 'load').observe(function() {
 					console.log('initializing shit...');
+
 					// do stuff with text field value...
 					var formValue = env.from_form_value(document.getElementById('foo'), ['keyup', 'paste']);
 
@@ -35,9 +64,8 @@
 				// });
 			});
 
-			Debuggee.initialize('ws://localhost:8000/debuggee', env)
+			Debuggee.initialize('ws://localhost:8000/debuggee', BrowserEnvironment.instance())
 							.andthen(function(){
-								console.log('hello?');
 								env.do_start();
 							});
 		</script>

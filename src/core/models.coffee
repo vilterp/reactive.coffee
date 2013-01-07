@@ -1,8 +1,8 @@
+# TODO: construct from additions, deletions, and mutations streams
+# TODO: sorted
 class ListModel
 
-  # TODO: changes stream, length
-
-  constructor: ->
+  constructor: (initial=[]) ->
     @list = []
     @additions = new EventStream()
     @removals = new EventStream()
@@ -11,6 +11,8 @@ class ListModel
     decrs = @removals.map((evt) -> -1)
     @length = EventStream.merge([incrs, decrs]).fold(0, (length, evt) -> length + evt)
     @empty = @length.map((l) -> l == 0)
+    for val in initial
+      @append(val)
 
   get: (index) ->
     if index < 0
@@ -51,6 +53,7 @@ class ListModel
     @mutations.trigger_close()
 
   map: (func) ->
+    # TODO: support initial
     mapped = new ListModel()
     @additions.observe(
       (evt) -> mapped.add(evt.index, func(evt.index, evt.value))
@@ -64,6 +67,8 @@ class ListModel
     for item in this.list
       mapped.append(item)
     return mapped
+
+  # TODO: filter. it's actually nontrivial, since the indicies won't be the same! grr
 
   bind_as_child_nodes: (parent) ->
     this.removals.observe(
@@ -80,3 +85,37 @@ class ListModel
           parent.insertBefore(evt.value, parent.childNodes[evt.index])
       )
     )
+
+class DictModel
+
+  # TODO: size...
+
+  constructor: (initial={}) ->
+    @dict = {}
+    @puts = new EventStream()
+    @removals = new EventStream()
+    for k, v of initial
+      @put(k, v)
+
+  put: (key, value) ->
+    @dict[key] = value
+    @puts.trigger_event(
+      key: key
+      value: value
+    )
+
+  get: (key) ->
+    return @dict[key]
+
+  remove: (key) ->
+    if not @dict[key]?
+      throw "key #{key} not in dict"
+    else
+      delete @dict[key]
+      @removals.trigger_event(
+        key: key
+      )
+
+exports = if exports? then exports else {}
+exports.ListModel = ListModel
+exports.DictModel = DictModel

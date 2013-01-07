@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Todo List</title>
+		<script type="text/javascript" src="../build/browser/reactive.js"></script>
+		<script type="text/javascript">
+			function TodoItem(text, done) {
+				this.text = new EventStream(text);
+				this.done = new EventStream(done);
+			}
+			function NewTodoView() {
+				var input = new ElementModel('input', {type: 'text'}, []);
+				var value = input.form_value(['keyup', 'paste']);
+				var enterPresses = input.event_stream('keydown').filter(function(evt){return evt.keyCode == 13});
+				enterPresses.observe(function(evt){input.el.value = ''}); // does this trigger a change event? how to do this?
+				this.newTodos = enterPresses.map(function(evt){return value.value});
+				this.elementModel = input;
+			}
+			function TodoView(todo) {
+				// set up checkbox
+				var checkBox = new ElementModel('input', {
+					'type': 'checkbox',
+				});
+				// this isn't great. can't just do it in attributes dict.
+				// also, BrowserEnvironment.instance() is so verbose!
+				BrowserEnvironment.instance().bind_value(todo.done, checkBox.el, 'checked');
+				// listen to checkbox...
+				var done = checkBox.form_value(['change']).map(function(x){return x == 'on'});
+				done.log('done');
+				done.observe(function(x){
+					todo.done.trigger_event(x); // TODO: infinite event chain here...?
+				});
+				// set up text
+				var itemText = new ElementModel('span', {'class': 'todo-item-text'}, [
+					new TextNode(todo.text)
+				]); // TODO: make editable
+				var li = new ElementModel('li', {'class': 'todo-view'}, [
+					checkBox,
+					itemText
+				]);
+				this.elementModel = li;
+			}
+			function TodoListView(todoList) {
+				var todoViews = todoList.map(function(idx, item) {
+					return new TodoView(item);
+				});
+				var list = new ElementModel('ul', {}, todoViews.map(function(idx, tv){return tv.elementModel}));
+				this.elementModel = list;
+			}
+			function NumLeftView(todoList) {
+				var numLeft = todoList.length;
+				this.elementModel = new ElementModel('span', {'class': 'num-left'}, [
+					new TextNode(numLeft.map(function(x){return x + ' ' + (x == 1 ? 'todo' : 'todos') + ' left'}))
+				]);
+			}
+			function AppView() {
+				var todoList = new ListModel();
+				var newTodoView = new NewTodoView();
+				var todoListView = new TodoListView(todoList);
+				var numLeftView = new NumLeftView(todoList);
+				// add todo when enter is pressed
+				newTodoView.newTodos.observe(function(newTodo) {
+					todoList.append(new TodoItem(newTodo, false));
+				});
+				this.elementModel = new ElementModel('div', {'class': 'todolist-app'}, [
+					newTodoView,
+					todoListView,
+					numLeftView
+				].map(function(view){return view.elementModel}));
+			}
+			BrowserEnvironment.instance().from_event(window, 'load').observe(function() {
+				var av = new AppView();
+				document.getElementById('container').appendChild(av.elementModel.el);
+			});
+		</script>
+	</head>
+	<body>
+		<h1>Todos</h1>
+		<div id="container"></div>
+	</body>
+</html>

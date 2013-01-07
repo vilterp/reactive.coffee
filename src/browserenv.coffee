@@ -70,6 +70,11 @@ class ElemDimensions extends EventStream
 
 class BrowserEnvironment extends Environment
 
+  @instance: () =>
+    if not @singleton?
+      @singleton = new BrowserEnvironment()
+    return @singleton
+
   constructor: () ->
     super(window.location.href)
     window.addEventListener('unload', (evt) =>
@@ -100,3 +105,101 @@ class BrowserEnvironment extends Environment
   from_form_value: (element, event_names) ->
     streams = (@from_event(element, event_name) for event_name in event_names)
     return EventStream.merge(streams, element.value).map((evt) -> element.value)
+
+class ElementModel
+
+  ###
+  @tag string
+  @attributes Object<string, EventStream or string> or DictModel<string, EventStream or string>
+  @children Array<ElementModel> or ListModel<ElementModel>
+  ###
+  constructor: (@tag, attributes, children) ->
+    @el = document.createElement(@tag)
+    # normalize children
+    if children?
+      if children.constructor == ListModel
+        @children = children
+      else if children.constructor == Array
+        @children = new ListModel(children)
+      else
+        throw "children must be an array or a ListModel"
+    else
+      @children = new ListModel()
+    # insert initial children
+    for child in @children.list
+      @el.appendChild(child.el)
+    # bind children to element
+    @children.additions.observe((evt) =>
+      if evt.index == @el.childNodes.length
+          @el.appendChild(evt.value.el)
+        else
+          @el.insertBefore(evt.value.el, @el.childNodes[evt.index])
+    )
+    @children.removals.observe((evt) =>
+      @el.removeChild(evt.removed.el)
+    )
+    @children.mutations.observe((evt) =>
+      @el.replaceChild(evt.new_value.el, evt.old_value.el)
+    )
+    # normalize attributes...
+    if not attributes?
+      attributes = {}
+    @attributes = new DictModel()
+    for k, v of attributes
+      if v.constructor == EventStream
+        @attributes.put(k, v)
+      else if v.constructor == String
+        @attributes.put(k, new EventStream(v))
+      else
+        throw "attribute value must be a string or an EventStream of strings"
+    # binding event streams to attributes
+    attr_bindings = {}
+    bind_attr = (key, value_stream) =>
+      @el.setAttribute(key, value_stream.value)
+      attr_bindings[key] = value_stream.observe(
+        (evt) => @el.setAttribute(key, evt),
+        (err) => throw err,
+        (reason) => @el.removeAttribute(key)
+      )
+    unbind_attr = (key) =>
+      obs = attr_bindings[evt.key]
+      if obs?
+        obs.dispose()
+        @el.removeAttribute(key)
+      delete attr_bindings[evt.key]
+    # set initial attributes
+    for k, v of @attributes.dict
+      bind_attr(k, v)
+    # observe changes to the dict
+    @attributes.puts.observe((evt) =>
+      unbind_attr(evt.key)
+      bind_attr(evt.key, evt.value)
+    )
+    @attributes.removals.observe((evt) =>
+      unbind_attr(evt.key)
+    )
+    # initialize evt stream dict...
+    @evt_streams = {}
+
+  # TODO: some kind of magic key accessor would be cool.
+  event_stream: (evt_name) ->
+    if not @evt_streams[evt_name]?
+      stream = BrowserEnvironment.instance().from_event(@el, evt_name)
+      @evt_streams[evt_name] = stream
+    return @evt_streams[evt_name]
+
+  form_value: (events) ->
+    if not @value
+      streams = (@event_stream(evt) for evt in events)
+      @value = EventStream.merge(streams, @el.value).map((evt) => @el.value)
+    return @value
+
+class TextNode
+
+  constructor: (@val_stream) ->
+    if typeof @val_stream == 'string'
+      @val_stream = new EventStream(@val_stream)
+    @el = document.createTextNode(@val_stream.value)
+    @val_stream.observe((evt) =>
+      @el.textContent = evt
+    )

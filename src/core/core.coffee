@@ -258,22 +258,29 @@ class EventStream
 class Observer
 
   constructor: (@event_stream, @event_cb, @error_cb, @close_cb) ->
+    @disposed = false
 
   toString: ->
       return "#<Observer>"
 
   on_event: (event) ->
-    @event_cb(event)
+    if not @disposed
+      @event_cb(event)
 
   on_error: (error) ->
-    if @error_cb?
-      @error_cb(error)
-    else
-      throw error
+    if not @disposed
+      if @error_cb?
+        @error_cb(error)
+      else
+        throw error
 
   on_close: (reason) ->
-    if @close_cb?
-      @close_cb(reason)
+    if not @disposed
+      if @close_cb?
+        @close_cb(reason)
+
+  dispose: () ->
+    @disposed = true
 
 class Future extends EventStream
 
@@ -301,6 +308,7 @@ class Future extends EventStream
     )
     return next
 
+# TODO: the initialization doesn't really work well.
 class Environment
 
   ###

@@ -2,6 +2,11 @@ es = require '../core/core'
 
 class NodeEnvironment extends es.Environment
 
+	@instance: () =>
+		if not @singleton
+			@singleton = new NodeEnvironment()
+		return @singleton
+
 	constructor: () ->
 		super(process.args.join(' '))
 		# register shutdown event
